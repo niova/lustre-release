@@ -28,8 +28,15 @@ jobs:
             libyaml-devel libnl3-devel libmount-devel \
             json-c-devel libssh-devel libattr-devel \
             libuuid-devel \
+            checkpolicy policycoreutils systemd-devel \
             kernel-devel kernel-headers kernel-rpm-macros \
             git
+          # Install the base "kernel" package without running its
+          # post-install scriptlets (dracut/grubby), which assume a real
+          # bootable system and fail inside a container. We only need the
+          # package present to satisfy lustre.spec's "Requires: kernel"
+          # build dependency check, not to actually boot it.
+          dnf install -y --setopt=tsflags=noscripts kernel
 
       - name: Checkout Lustre source
         uses: actions/checkout@v4
