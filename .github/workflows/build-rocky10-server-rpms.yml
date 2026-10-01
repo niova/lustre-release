@@ -184,6 +184,10 @@ jobs:
 
       - name: Create Lustre source tarball
         run: |
+          # actions/checkout in a container runs as a different uid than
+          # the one that owns the checked-out files on the host, which
+          # git treats as "dubious ownership" and refuses to operate on.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git archive --format=tar.gz --prefix=lustre-source/ \
             -o /tmp/lustre-source.tar.gz HEAD
 
