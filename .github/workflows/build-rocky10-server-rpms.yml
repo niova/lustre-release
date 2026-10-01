@@ -81,14 +81,21 @@ jobs:
           # support silently falling back to "no" here produced an
           # inconsistent module set and broke the kmod-devel/lustre-client-
           # devel %files generation in lustre.spec.in.
+          #
+          # --disable-shared must NOT be used: lustre.spec.in only
+          # creates/populates lustre-devel.files inside its "%if %{with
+          # shared}" block in %install (see liblnetconfig.so lines). With
+          # shared libs disabled that file is never created, and
+          # "%files devel -f lustre-devel.files" then fails rpmbuild with
+          # "Could not open %files file lustre-devel.files: No such file
+          # or directory".
           sh autogen.sh
           KDIR="/usr/src/kernels/$(ls /usr/src/kernels)"
           ./configure \
             --with-linux="${KDIR}" \
             --with-linux-obj="${KDIR}" \
             --disable-gss \
-            --disable-crypto \
-            --disable-shared
+            --disable-crypto
 
       - name: Build RPMs (client/userspace only)
         run: |
