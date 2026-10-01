@@ -142,6 +142,9 @@ jobs:
         run: |
           dnf install -y dnf-plugins-core
           dnf config-manager --set-enabled crb
+          # quilt is not in Rocky 10's base/AppStream/CRB repos; pull it
+          # from EPEL instead.
+          dnf install -y epel-release
           dnf groupinstall -y "Development Tools"
           dnf install -y \
             gcc autoconf automake libtool which make patch diffutils file \
@@ -151,8 +154,14 @@ jobs:
             libyaml-devel libnl3-devel libmount-devel \
             json-c-devel libssh-devel libattr-devel \
             libuuid-devel \
-            lsb_release ncurses-devel openssl-devel dwarves \
+            ncurses-devel openssl-devel dwarves \
             git curl
+          # lsb_release (redhat-lsb-core) is not packaged for RHEL/Rocky
+          # 10 (LSB is deprecated); contrib/lbuild/lbuild-rhel only uses
+          # it to special-case real RHEL (vs. clones) for a sudo
+          # yumdownloader rule, and tolerates it being absent (empty
+          # command substitution just skips the "sudo" branch), so it is
+          # intentionally omitted here rather than installed.
 
       - name: Checkout Lustre source
         uses: actions/checkout@v4
