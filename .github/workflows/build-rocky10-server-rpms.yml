@@ -57,21 +57,34 @@ jobs:
           cd ..
           rm -rf e2fsprogs
 
-      - name: Configure Lustre (server / ldiskfs only)
+      - name: Configure Lustre (compile sanity check only)
         run: |
+          # NOTE: this job builds against the *stock*, unpatched Rocky
+          # 10.2 kernel-devel package. Lustre's ldiskfs server support
+          # requires the ext4 kernel source to have the ldiskfs patch
+          # series (ldiskfs/kernel_patches/series/ldiskfs-6.12-rhel10.2.series)
+          # applied first -- something configure/make cannot do against
+          # an already-built, installed kernel-devel package. Because of
+          # this, --enable-server/--enable-ldiskfs cannot succeed here;
+          # HAVE_SERVER_SUPPORT will not be set and the resulting RPMs
+          # will only contain client/userspace bits.
+          #
+          # This job therefore only validates that the Lustre source
+          # still configures and compiles cleanly against a current
+          # kernel. For real, installable ldiskfs *server* RPMs, see the
+          # build-server-rpms-patched-kernel job below, which builds a
+          # patched kernel via contrib/lbuild.
           sh autogen.sh
           KDIR="/usr/src/kernels/$(ls /usr/src/kernels)"
           ./configure \
             --with-linux="${KDIR}" \
             --with-linux-obj="${KDIR}" \
             --disable-client \
-            --enable-server \
-            --enable-ldiskfs \
             --disable-gss \
             --disable-crypto \
             --disable-shared
 
-      - name: Build server RPMs
+      - name: Build RPMs (client/userspace only)
         run: |
           make rpms
 
