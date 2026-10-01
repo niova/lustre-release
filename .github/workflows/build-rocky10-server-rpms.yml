@@ -74,12 +74,18 @@ jobs:
           # kernel. For real, installable ldiskfs *server* RPMs, see the
           # build-server-rpms-patched-kernel job below, which builds a
           # patched kernel via contrib/lbuild.
+          #
+          # Leaving --disable-client out (the default is client enabled)
+          # keeps client+module support self-consistent against an
+          # unpatched kernel. Combining --disable-client with server
+          # support silently falling back to "no" here produced an
+          # inconsistent module set and broke the kmod-devel/lustre-client-
+          # devel %files generation in lustre.spec.in.
           sh autogen.sh
           KDIR="/usr/src/kernels/$(ls /usr/src/kernels)"
           ./configure \
             --with-linux="${KDIR}" \
             --with-linux-obj="${KDIR}" \
-            --disable-client \
             --disable-gss \
             --disable-crypto \
             --disable-shared
