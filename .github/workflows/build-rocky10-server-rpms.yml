@@ -193,11 +193,15 @@ jobs:
 
       - name: Build patched kernel + ldiskfs server RPMs via lbuild
         run: |
-          mkdir -p /tmp/lbuild-work
+          # lbuild requires a --kerneltree/--kerneldir staging directory
+          # even when it is going to download the kernel SRPM itself
+          # (it uses the dir as the download/cache destination).
+          mkdir -p /tmp/lbuild-work /tmp/kernel-tree
           cd /tmp/lbuild-work
           "${GITHUB_WORKSPACE}/contrib/lbuild/lbuild" \
             --target=6.12-rhel10.2 \
             --distro=rhel10.2 \
+            --kerneltree=/tmp/kernel-tree \
             --lustre=/tmp/lustre-source.tar.gz \
             --disable-zfs \
             -- --disable-gss --disable-crypto
