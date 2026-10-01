@@ -67,14 +67,110 @@ jobs:
         run: |
           make rpms
 
-      - name: Collect RPMs
+      - name: Collect RPMs (mirror downloads.whamcloud.com layout)
         run: |
-          mkdir -p artifacts
-          find . -maxdepth 3 -name "*.rpm" -exec cp -v {} artifacts/ \;
+          # Mirrors the upstream layout, e.g.:
+          # https://downloads.whamcloud.com/public/lustre/latest-release/el8.10/server/RPMS/x86_64/
+          mkdir -p artifacts/el10.2/server/RPMS/x86_64
+          mkdir -p artifacts/el10.2/server/SRPMS
+          find . -maxdepth 3 -name "*.src.rpm" \
+            -exec cp -v {} artifacts/el10.2/server/SRPMS/ \;
+          find . -maxdepth 3 -name "*.rpm" ! -name "*.src.rpm" \
+            -exec cp -v {} artifacts/el10.2/server/RPMS/x86_64/ \;
 
       - name: Upload RPM artifacts
         uses: actions/upload-artifact@v4
         with:
           name: lustre-server-rpms-rocky10.2
-          path: artifacts/*.rpm
+          path: artifacts/el10.2/**
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------
+  # Deployable RPMs: builds a real patched kernel (kernel-lustre) with the
+  # ldiskfs/ext4 patch series for rhel10.2 applied, using Lustre's own
+  # "lbuild" release tool (contrib/lbuild). This is what is required if
+  # the resulting RPMs are meant to be installed on an actual OSS/MDS.
+  #
+  # NOTE: this job downloads a full kernel SRPM from the CentOS Stream 10
+  # mirror and rebuilds the kernel, so it is slow (likely 1+ hour) and
+  # depends on network/mirror availability. It is intentionally manual
+  # (workflow_dispatch) only, rather than running on every push/PR.
+  # It has not been validated end-to-end in this environment; treat the
+  # first run as a trial and inspect logs closely.
+  # ---------------------------------------------------------------------
+  build-server-rpms-patched-kernel:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux/rockylinux:10.2
+    steps:
+      - name: Install base build tooling
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf config-manager --set-enabled crb
+          dnf groupinstall -y "Development Tools"
+          dnf install -y \
+            gcc autoconf automake libtool which make patch diffutils file \
+            rpm-build rpmdevtools redhat-rpm-config quilt \
+            binutils-devel python3 python3-devel elfutils-devel \
+            libselinux-devel libaio-devel bc bison flex \
+            libyaml-devel libnl3-devel libmount-devel \
+            json-c-devel libssh-devel libattr-devel \
+            lsb_release ncurses-devel openssl-devel dwarves \
+            git curl
+
+      - name: Checkout Lustre source
+        uses: actions/checkout@v4
+
+      - name: Build and install e2fsprogs (Lustre-patched)
+        run: |
+          git clone --depth 1 -b v1.47.3-wc2 \
+            git://review.whamcloud.com/tools/e2fsprogs.git
+          cd e2fsprogs
+          ./configure --with-root-prefix=/usr --enable-elf-shlibs \
+            --libdir=/usr/lib64 \
+            --disable-uuidd --disable-fsck \
+            --disable-e2initrd-helper \
+            --disable-libblkid --disable-libuuid \
+            --enable-quota --disable-fuse2fs
+          make -j"$(nproc)"
+          make install
+          cd ..
+          rm -rf e2fsprogs
+
+      - name: Create Lustre source tarball
+        run: |
+          git archive --format=tar.gz --prefix=lustre-source/ \
+            -o /tmp/lustre-source.tar.gz HEAD
+
+      - name: Build patched kernel + ldiskfs server RPMs via lbuild
+        run: |
+          mkdir -p /tmp/lbuild-work
+          cd /tmp/lbuild-work
+          "${GITHUB_WORKSPACE}/contrib/lbuild/lbuild" \
+            --target=6.12-rhel10.2 \
+            --distro=rhel10.2 \
+            --lustre=/tmp/lustre-source.tar.gz \
+            --disable-zfs \
+            -- --disable-gss --disable-crypto
+
+      - name: Collect RPMs (mirror downloads.whamcloud.com layout)
+        run: |
+          # Mirrors the upstream layout, e.g.:
+          # https://downloads.whamcloud.com/public/lustre/latest-release/el8.10/server/RPMS/x86_64/
+          # (patched kernel RPMs and lustre/kmod RPMs are published side by
+          # side in the same RPMS/x86_64 directory upstream, so we do the
+          # same here rather than splitting them into separate dirs)
+          mkdir -p artifacts/el10.2/server/RPMS/x86_64
+          mkdir -p artifacts/el10.2/server/SRPMS
+          find /tmp/lbuild-work -maxdepth 4 -name "*.src.rpm" \
+            -exec cp -v {} artifacts/el10.2/server/SRPMS/ \;
+          find /tmp/lbuild-work -maxdepth 4 -name "*.rpm" ! -name "*.src.rpm" \
+            -exec cp -v {} artifacts/el10.2/server/RPMS/x86_64/ \;
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lustre-server-rpms-rocky10.2-patched-kernel
+          path: artifacts/el10.2/**
           if-no-files-found: error
