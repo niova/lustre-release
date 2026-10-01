@@ -27,6 +27,7 @@ jobs:
             libselinux-devel libaio-devel bc bison flex \
             libyaml-devel libnl3-devel libmount-devel \
             json-c-devel libssh-devel libattr-devel \
+            libuuid-devel \
             kernel-devel kernel-headers kernel-rpm-macros \
             git
 
@@ -43,7 +44,7 @@ jobs:
             --disable-uuidd --disable-fsck \
             --disable-e2initrd-helper \
             --disable-libblkid --disable-libuuid \
-            --enable-quota --disable-fuse2fs
+            --disable-fuse2fs
           make -j"$(nproc)"
           make install
           cd ..
@@ -116,6 +117,7 @@ jobs:
             libselinux-devel libaio-devel bc bison flex \
             libyaml-devel libnl3-devel libmount-devel \
             json-c-devel libssh-devel libattr-devel \
+            libuuid-devel \
             lsb_release ncurses-devel openssl-devel dwarves \
             git curl
 
@@ -132,7 +134,7 @@ jobs:
             --disable-uuidd --disable-fsck \
             --disable-e2initrd-helper \
             --disable-libblkid --disable-libuuid \
-            --enable-quota --disable-fuse2fs
+            --disable-fuse2fs
           make -j"$(nproc)"
           make install
           cd ..
