@@ -1,0 +1,80 @@
+name: Build Lustre Server RPMs (Rocky Linux 10.2)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-server-rpms:
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux/rockylinux:10.2
+    steps:
+      - name: Install base build tooling
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf config-manager --set-enabled crb
+          dnf groupinstall -y "Development Tools"
+          dnf install -y \
+            gcc autoconf automake libtool which make patch diffutils file \
+            rpm-build redhat-rpm-config \
+            binutils-devel python3 python3-devel elfutils-devel \
+            libselinux-devel libaio-devel bc bison flex \
+            libyaml-devel libnl3-devel libmount-devel \
+            json-c-devel libssh-devel libattr-devel \
+            kernel-devel kernel-headers kernel-rpm-macros \
+            git
+
+      - name: Checkout Lustre source
+        uses: actions/checkout@v4
+
+      - name: Build and install e2fsprogs (Lustre-patched)
+        run: |
+          git clone --depth 1 -b v1.47.3-wc2 \
+            git://review.whamcloud.com/tools/e2fsprogs.git
+          cd e2fsprogs
+          ./configure --with-root-prefix=/usr --enable-elf-shlibs \
+            --libdir=/usr/lib64 \
+            --disable-uuidd --disable-fsck \
+            --disable-e2initrd-helper \
+            --disable-libblkid --disable-libuuid \
+            --enable-quota --disable-fuse2fs
+          make -j"$(nproc)"
+          make install
+          cd ..
+          rm -rf e2fsprogs
+
+      - name: Configure Lustre (server / ldiskfs only)
+        run: |
+          sh autogen.sh
+          KDIR="/usr/src/kernels/$(ls /usr/src/kernels)"
+          ./configure \
+            --with-linux="${KDIR}" \
+            --with-linux-obj="${KDIR}" \
+            --disable-client \
+            --enable-server \
+            --enable-ldiskfs \
+            --disable-gss \
+            --disable-crypto \
+            --disable-shared
+
+      - name: Build server RPMs
+        run: |
+          make rpms
+
+      - name: Collect RPMs
+        run: |
+          mkdir -p artifacts
+          find . -maxdepth 3 -name "*.rpm" -exec cp -v {} artifacts/ \;
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lustre-server-rpms-rocky10.2
+          path: artifacts/*.rpm
+          if-no-files-found: error
